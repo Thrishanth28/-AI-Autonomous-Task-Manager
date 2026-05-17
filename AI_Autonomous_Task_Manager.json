@@ -1,0 +1,432 @@
+{
+  "name": "AI Autonomous Task Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "atm-001",
+      "name": "Chat Trigger",
+      "webhookId": "7c4f2e91-d3b8-4a1f-b6e2-9c5f3d082750"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json.chatInput || '';\nconst goal = input.trim();\nif (!goal || goal.length < 5) {\n  return { json: { valid: false, goal: '', error: 'Please describe your goal. Example: Launch my SaaS product in 30 days' } };\n}\nlet goalType = 'general';\nconst lower = goal.toLowerCase();\nif (lower.match(/launch|build|create|develop|start/)) goalType = 'creation';\nelse if (lower.match(/learn|study|master/)) goalType = 'learning';\nelse if (lower.match(/grow|scale|increase|improve/)) goalType = 'growth';\nelse if (lower.match(/plan|organize|manage/)) goalType = 'planning';\nelse if (lower.match(/market|promote|sell/)) goalType = 'marketing';\nlet timeframe = '30 days';\nconst tm = goal.match(/(\\d+)\\s*(day|week|month|hour)/i);\nif (tm) timeframe = tm[0];\nreturn { json: { valid: true, goal: goal, goalType: goalType, timeframe: timeframe, sessionId: 'task_' + Date.now() } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "atm-002",
+      "name": "Goal Input Processor"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Goal Analyzer Agent.\n\nGoal: \"{{ $json.goal }}\"\nGoal Type: {{ $json.goalType }}\nTimeframe: {{ $json.timeframe }}\n\nAnalyze this goal and respond with these sections:\n\nGOAL CLARITY SCORE: [X]/10\n\nGOAL INTERPRETATION:\nWhat exactly is the user trying to achieve? What does success look like?\n\nGOAL COMPLEXITY: [Simple/Medium/Complex/Very Complex]\n\nKEY SUCCESS FACTORS:\nList 5 critical things that must happen for this goal to succeed.\n\nPOTENTIAL OBSTACLES:\nList 4 biggest challenges that could prevent success.\n\nRESOURCES NEEDED:\nWhat skills, tools, time, money or people are needed?\n\nSUCCESS METRICS:\nHow will the user know they achieved this goal? List 3 measurable outcomes.\n\nGOAL REFINED:\nWrite a SMART version of this goal \u2014 Specific, Measurable, Achievable, Relevant, Time-bound.\n\nBe specific and practical.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        440,
+        0
+      ],
+      "id": "atm-003",
+      "name": "Goal Analyzer Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        440,
+        200
+      ],
+      "id": "atm-004",
+      "name": "Gemini \u2014 Goal Analyzer",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.item.json.text || '';\nconst prev = $('Goal Input Processor').item.json;\nreturn { json: { goal: prev.goal, goalType: prev.goalType, timeframe: prev.timeframe, sessionId: prev.sessionId, goalAnalysis: analysis } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "atm-005",
+      "name": "Store Goal Analysis"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Task Breakdown Agent \u2014 an expert project manager.\n\nGOAL: {{ $json.goal }}\nTIMEFRAME: {{ $json.timeframe }}\n\nGOAL ANALYSIS:\n{{ $json.goalAnalysis }}\n\nBreak this goal into exactly 8 specific executable tasks.\n\nFor each task use this EXACT format:\n\nTASK [number]:\nName: [Short task name max 6 words]\nDescription: [What exactly needs to be done \u2014 2 sentences]\nDeliverables: [What the output of this task is]\nSkills Required: [What skills or tools are needed]\nDependencies: [Which other tasks must be done first or NONE]\nEstimated Time: [Realistic time estimate]\nDifficulty: [Easy/Medium/Hard]\n\nAfter all 8 tasks write:\n\nCRITICAL PATH:\nWhich 3 tasks are most important and must not be delayed?\n\nQUICK WINS:\nWhich 2 tasks can be completed fastest for early momentum?",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        880,
+        0
+      ],
+      "id": "atm-006",
+      "name": "Task Breakdown Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        880,
+        200
+      ],
+      "id": "atm-007",
+      "name": "Gemini \u2014 Task Breakdown",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tasks = $input.item.json.text || '';\nconst prev = $('Store Goal Analysis').item.json;\nreturn { json: { goal: prev.goal, goalType: prev.goalType, timeframe: prev.timeframe, sessionId: prev.sessionId, goalAnalysis: prev.goalAnalysis, taskBreakdown: tasks } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "atm-008",
+      "name": "Store Task Breakdown"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Priority and Planning Agent.\n\nGOAL: {{ $json.goal }}\nTIMEFRAME: {{ $json.timeframe }}\n\nTASK BREAKDOWN:\n{{ $json.taskBreakdown }}\n\nCreate a detailed priority matrix and execution timeline.\n\nPRIORITY MATRIX \u2014 Eisenhower Matrix:\n\nQUADRANT 1 \u2014 Urgent and Important (Do First):\n[Tasks that are both urgent and critical]\n\nQUADRANT 2 \u2014 Not Urgent but Important (Schedule):\n[Tasks that are important but can be planned]\n\nQUADRANT 3 \u2014 Urgent but Not Important (Delegate):\n[Tasks that are urgent but lower priority]\n\nQUADRANT 4 \u2014 Not Urgent and Not Important (Later):\n[Tasks that can wait]\n\nWEEKLY EXECUTION TIMELINE:\n\nWEEK 1 \u2014 Foundation:\n[Specific tasks and daily actions]\n\nWEEK 2 \u2014 Building:\n[Specific tasks and daily actions]\n\nWEEK 3 \u2014 Execution:\n[Specific tasks and daily actions]\n\nWEEK 4 \u2014 Launch and Review:\n[Specific tasks and daily actions]\n\nDAILY SCHEDULE TEMPLATE:\nMorning 1 hour: [what to do]\nAfternoon 1 hour: [what to do]\nEvening 30 mins: [what to do]\n\nMILESTONES:\nDay 7: [what should be complete]\nDay 14: [what should be complete]\nDay 21: [what should be complete]\nDay 30: [final goal achieved]\n\nBe specific with dates and daily actions.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "atm-009",
+      "name": "Priority Planning Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        200
+      ],
+      "id": "atm-010",
+      "name": "Gemini \u2014 Priority Planning",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $input.item.json.text || '';\nconst prev = $('Store Task Breakdown').item.json;\nreturn { json: { goal: prev.goal, goalType: prev.goalType, timeframe: prev.timeframe, sessionId: prev.sessionId, goalAnalysis: prev.goalAnalysis, taskBreakdown: prev.taskBreakdown, priorityPlan: plan } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "id": "atm-011",
+      "name": "Store Priority Plan"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Execution Agent \u2014 an expert at writing detailed step-by-step guides.\n\nGOAL: {{ $json.goal }}\n\nTASK LIST:\n{{ $json.taskBreakdown }}\n\nPRIORITY PLAN:\n{{ $json.priorityPlan }}\n\nFor the TOP 3 MOST IMPORTANT tasks write a detailed execution guide.\n\nFor each task use this format:\n\nTASK NAME: [Name]\n\nSTEP BY STEP GUIDE:\nStep 1: [Exact first action \u2014 very specific]\nStep 2: [Exact second action]\nStep 3: [Exact third action]\nStep 4: [Exact fourth action]\nStep 5: [Exact fifth action]\n\nTOOLS AND RESOURCES:\n[Specific tool or resource needed]\n\nCOMMON MISTAKES TO AVOID:\n1. [Specific mistake]\n2. [Specific mistake]\n3. [Specific mistake]\n\nPRO TIPS:\n1. [Expert tip most people miss]\n2. [Expert tip]\n\nDEFINITION OF DONE:\n[Exactly when is this task 100% complete]\n\nAfter all 3 guides write:\n\nEXECUTION PRINCIPLES:\nList 5 mindset principles for successfully executing this entire goal.\n\nBe extremely specific. Every step must be immediately actionable.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "atm-012",
+      "name": "Execution Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        200
+      ],
+      "id": "atm-013",
+      "name": "Gemini \u2014 Execution",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const execution = $input.item.json.text || '';\nconst prev = $('Store Priority Plan').item.json;\nreturn { json: { goal: prev.goal, goalType: prev.goalType, timeframe: prev.timeframe, sessionId: prev.sessionId, goalAnalysis: prev.goalAnalysis, taskBreakdown: prev.taskBreakdown, priorityPlan: prev.priorityPlan, executionGuide: execution } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "id": "atm-014",
+      "name": "Store Execution Guide"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the Master Review Agent \u2014 the final synthesizer of the AI Autonomous Task Manager.\n\nORIGINAL GOAL: {{ $json.goal }}\nGOAL TYPE: {{ $json.goalType }}\nTIMEFRAME: {{ $json.timeframe }}\n\nGOAL ANALYSIS:\n{{ $json.goalAnalysis }}\n\nTASK BREAKDOWN:\n{{ $json.taskBreakdown }}\n\nPRIORITY AND TIMELINE:\n{{ $json.priorityPlan }}\n\nEXECUTION GUIDE:\n{{ $json.executionGuide }}\n\nCreate the final comprehensive autonomous task management report:\n\n# AI AUTONOMOUS TASK MANAGER REPORT\n\nGoal: {{ $json.goal }}\nTimeframe: {{ $json.timeframe }}\nAgents: Goal Analyzer, Task Breakdown, Priority Planning, Execution, Master Review\n\n---\n\n## GOAL INTELLIGENCE\nWhat exactly you are achieving and what success looks like.\n\n---\n\n## YOUR 8 TASKS \u2014 COMPLETE LIST\nAll 8 tasks with name, description and estimated time.\n\n---\n\n## PRIORITY EXECUTION ORDER\nExact order to tackle tasks with reasoning.\n\n---\n\n## WEEK BY WEEK TIMELINE\nDetailed week-by-week execution plan.\n\n---\n\n## TOP 3 TASKS \u2014 STEP BY STEP GUIDES\nDetailed execution guides for the 3 most critical tasks.\n\n---\n\n## KEY MILESTONES\nDay 7, Day 14, Day 21, Day 30 milestones.\n\n---\n\n## RISK ASSESSMENT\nTop 5 risks with mitigation strategies.\n\n---\n\n## RESOURCES AND TOOLS NEEDED\nEverything needed to execute this plan.\n\n---\n\n## SUCCESS METRICS\nHow to measure progress and know when goal is achieved.\n\n---\n\n## YOUR FIRST ACTION RIGHT NOW\nThe single most important thing to do in the next 30 minutes.\n\n---\n\n## MOTIVATION\nA powerful paragraph to keep momentum when things get hard.\n\n---\nGenerated by AI Autonomous Task Manager \u2014 5 AI Agents \u2014 Powered by n8n + Google Gemini",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2200,
+        0
+      ],
+      "id": "atm-015",
+      "name": "Master Review Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        200
+      ],
+      "id": "atm-016",
+      "name": "Gemini \u2014 Master Review",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Goal Input Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Goal Input Processor": {
+      "main": [
+        [
+          {
+            "node": "Goal Analyzer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini \u2014 Goal Analyzer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Goal Analyzer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Goal Analyzer Agent": {
+      "main": [
+        [
+          {
+            "node": "Store Goal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Goal Analysis": {
+      "main": [
+        [
+          {
+            "node": "Task Breakdown Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini \u2014 Task Breakdown": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Task Breakdown Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Breakdown Agent": {
+      "main": [
+        [
+          {
+            "node": "Store Task Breakdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Task Breakdown": {
+      "main": [
+        [
+          {
+            "node": "Priority Planning Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini \u2014 Priority Planning": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Priority Planning Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Planning Agent": {
+      "main": [
+        [
+          {
+            "node": "Store Priority Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Priority Plan": {
+      "main": [
+        [
+          {
+            "node": "Execution Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini \u2014 Execution": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Execution Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execution Agent": {
+      "main": [
+        [
+          {
+            "node": "Store Execution Guide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Execution Guide": {
+      "main": [
+        [
+          {
+            "node": "Master Review Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini \u2014 Master Review": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Master Review Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "atm-v1-final-2026",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "AIAutonomousTaskManager",
+  "tags": []
+}
